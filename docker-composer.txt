@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # 1. Database PostgreSQL Cache IP Intel
+  postgres:
+    image: postgres:16-alpine
+    container_name: soc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: abuseip
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: PasswordKuat123
+    ports:
+      # Expose port database ke host (opsional untuk DBeaver/pgAdmin)
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - soc_postgres_data:/var/lib/postgresql/data
+      # Inisialisasi otomatis tabel saat pertama kali dibuat
+      - ./schema_abuseip.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abuseip"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Sidecar IP Intel (Node.js API)
+  sidecar:
+    build: .
+    container_name: soc-sidecar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8899
+      PGHOST: postgres       # Menggunakan internal DNS Docker untuk konek ke container postgres
+      PGPORT: 5432
+      PGDATABASE: abuseip
+      PGUSER: postgres
+      PGPASSWORD: PasswordKuat123
+      CACHE_TTL_DAYS: 7
+    ports:
+      # Expose port 8899 agar bisa ditembak oleh n8n
+      - "8899:8899"
+
+volumes:
+  soc_postgres_data:
+    name: soc_postgres_data
